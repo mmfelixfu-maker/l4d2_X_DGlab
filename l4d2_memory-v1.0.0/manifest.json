@@ -1,0 +1,811 @@
+{
+  "id": "l4d2_memory",
+  "name": "L4D2 玩家状态（外部采集）",
+  "version": "1.0.0",
+  "sdk": "1",
+  "author": "MMFelix",
+  "entry": "main.py",
+  "capabilities": {
+    "startup_check": true
+  },
+  "description": "只读本地玩家状态；独立事件波形与生命值强度层。无隐藏或反作弊绕过功能。",
+  "config_schema": [
+    {
+      "section": "🔌 采集与运行",
+      "fields": [
+        {
+          "key": "observe_only",
+          "type": "bool",
+          "label": "仅观察状态",
+          "default": true,
+          "description": "关闭后才向设备输出；开启时只更新状态卡片。"
+        },
+        {
+          "key": "profile_path",
+          "type": "path",
+          "label": "游戏地址配置",
+          "default": "profiles/game.json",
+          "description": "相对插件目录或绝对路径；版本指纹不符时暂停读取。"
+        },
+        {
+          "key": "poll_hz",
+          "type": "number",
+          "label": "轮询频率（Hz）",
+          "default": 120,
+          "min": 10,
+          "max": 500,
+          "step": 10,
+          "description": "默认 120Hz 观察玩家 tick，无法保证捕获全部服务器 tick。"
+        },
+        {
+          "key": "stale_s",
+          "type": "duration",
+          "label": "数据过期时间",
+          "default": 1.5,
+          "min": 0.2,
+          "max": 10,
+          "step": 0.1
+        },
+        {
+          "key": "temp_decay",
+          "type": "number",
+          "label": "临时血量每秒衰减",
+          "default": 0.27,
+          "min": 0,
+          "max": 10,
+          "step": 0.01,
+          "description": "标准规则通常为 0.27；修改规则的服务器应按实际值设置。"
+        },
+        {
+          "key": "status_hz",
+          "type": "number",
+          "label": "状态卡片刷新频率",
+          "default": 1,
+          "min": 0.2,
+          "max": 10,
+          "step": 0.2
+        }
+      ]
+    },
+    {
+      "section": "⚡ 生命值 → 强度层",
+      "fields": [
+        {
+          "key": "mode",
+          "type": "select",
+          "label": "强度模式",
+          "default": "dynamic",
+          "options": [
+            {
+              "value": "dynamic",
+              "label": "动态：随当前损失生命值"
+            },
+            {
+              "value": "fixed",
+              "label": "固定：保持固定强度"
+            },
+            {
+              "value": "challenge",
+              "label": "挑战：累计本次会话损失生命值"
+            }
+          ]
+        },
+        {
+          "key": "hp_scale",
+          "type": "number",
+          "label": "每损失 1 HP 对应强度百分比",
+          "default": 1.0,
+          "min": 0,
+          "max": 10,
+          "step": 0.1,
+          "description": "动态：满血为 0，受伤升高，治疗降低；倒地/挂边时使用上限。"
+        },
+        {
+          "key": "strength_cap",
+          "type": "percent",
+          "label": "本插件强度上限",
+          "default": 60
+        },
+        {
+          "key": "fixed_strength",
+          "type": "percent",
+          "label": "固定模式强度",
+          "default": 20
+        },
+        {
+          "key": "channel",
+          "type": "channel",
+          "label": "基础强度通道",
+          "default": "both"
+        }
+      ]
+    },
+    {
+      "section": "💔 受伤",
+      "fields": [
+        {
+          "key": "hurt_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "有效生命值下降；临时血量自然衰减不计入。"
+        },
+        {
+          "key": "hurt_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "hurt_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 1.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "hurt_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "hurt_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "hurt_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "section": "🩸 倒地",
+      "fields": [
+        {
+          "key": "incap_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "进入倒地状态，仅在开始时触发。"
+        },
+        {
+          "key": "incap_sustain",
+          "type": "bool",
+          "label": "倒地期间持续反馈",
+          "default": true,
+          "description": "持续续播短波形，扶起或死亡后停止续播；最后一段最多 0.5 秒。关闭则只触发一次。"
+        },
+        {
+          "key": "incap_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "incap_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 1.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "incap_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "incap_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "incap_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "section": "🧗 挂边",
+      "fields": [
+        {
+          "key": "ledge_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "进入挂边状态，与普通倒地区分。"
+        },
+        {
+          "key": "ledge_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "ledge_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 1.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "ledge_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "ledge_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "ledge_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "section": "🪢 Smoker 控制",
+      "fields": [
+        {
+          "key": "smoker_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "有效舌头拥有者句柄出现。"
+        },
+        {
+          "key": "smoker_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "smoker_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 1.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "smoker_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "smoker_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "smoker_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "section": "🐾 Hunter 扑倒",
+      "fields": [
+        {
+          "key": "hunter_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "有效扑倒攻击者句柄出现。"
+        },
+        {
+          "key": "hunter_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "hunter_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 1.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "hunter_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "hunter_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "hunter_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "section": "🎭 Jockey 骑乘",
+      "fields": [
+        {
+          "key": "jockey_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "有效骑乘攻击者句柄出现。"
+        },
+        {
+          "key": "jockey_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "jockey_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 1.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "jockey_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "jockey_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "jockey_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "section": "🐂 Charger 携带",
+      "fields": [
+        {
+          "key": "charger_carry_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "进入 Charger 携带阶段。"
+        },
+        {
+          "key": "charger_carry_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "charger_carry_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 1.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "charger_carry_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "charger_carry_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "charger_carry_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "section": "🔨 Charger 砸地",
+      "fields": [
+        {
+          "key": "charger_pummel_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "进入 Charger 砸地阶段。"
+        },
+        {
+          "key": "charger_pummel_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "charger_pummel_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 1.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "charger_pummel_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "charger_pummel_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "charger_pummel_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "section": "💀 死亡",
+      "fields": [
+        {
+          "key": "death_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "存活变为死亡。"
+        },
+        {
+          "key": "death_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "death_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 3.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "death_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "death_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "death_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "section": "🕊 脱离控制",
+      "fields": [
+        {
+          "key": "released_enabled",
+          "type": "bool",
+          "label": "启用此事件",
+          "default": true,
+          "description": "所有特感控制关系解除；控制阶段切换不算脱离。"
+        },
+        {
+          "key": "released_preset",
+          "type": "preset",
+          "label": "波形预设",
+          "default": "",
+          "description": "留空时只显示事件；不会凭空选择预设。"
+        },
+        {
+          "key": "released_duration",
+          "type": "duration",
+          "label": "事件持续时间",
+          "default": 1.0,
+          "min": 0.05,
+          "max": 300,
+          "step": 0.1
+        },
+        {
+          "key": "released_channel",
+          "type": "select",
+          "label": "事件通道",
+          "default": "inherit",
+          "options": [
+            {
+              "value": "inherit",
+              "label": "跟随基础通道"
+            },
+            {
+              "value": "a",
+              "label": "A"
+            },
+            {
+              "value": "b",
+              "label": "B"
+            },
+            {
+              "value": "both",
+              "label": "双通道"
+            }
+          ]
+        },
+        {
+          "key": "released_strength",
+          "type": "percent",
+          "label": "事件期间最低强度",
+          "default": 0,
+          "description": "0 表示只用基础强度；事件不叠加，取较高值，结束后回基础层。"
+        },
+        {
+          "key": "released_cooldown",
+          "type": "duration",
+          "label": "重复触发最短间隔",
+          "default": 0.15,
+          "min": 0,
+          "max": 60,
+          "step": 0.05
+        }
+      ]
+    }
+  ]
+}

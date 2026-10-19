@@ -1,0 +1,136 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CheatTable CheatEngineTableVersion="26">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>0</ID>
+      <Description>"当前实血 / m_iHealth"</Description>
+      <VariableType>4 Bytes</VariableType>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>EC</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>1</ID>
+      <Description>"队伍 / m_iTeamNum"</Description>
+      <VariableType>4 Bytes</VariableType>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>E4</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>2</ID>
+      <Description>"生命状态（0=存活） / m_lifeState"</Description>
+      <VariableType>Byte</VariableType>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>147</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>3</ID>
+      <Description>"最大实血 / m_iMaxHealth"</Description>
+      <VariableType>4 Bytes</VariableType>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>1FDC</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>4</ID>
+      <Description>"倒地 / m_isIncapacitated"</Description>
+      <VariableType>Byte</VariableType>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>1EA9</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>5</ID>
+      <Description>"挂边 / m_isHangingFromLedge"</Description>
+      <VariableType>Byte</VariableType>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>25EC</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>6</ID>
+      <Description>"黑白 / m_bIsOnThirdStrike"</Description>
+      <VariableType>Byte</VariableType>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>1EC0</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>7</ID>
+      <Description>"Smoker 句柄 / m_tongueOwner"</Description>
+      <VariableType>4 Bytes</VariableType>
+      <ShowAsHex>1</ShowAsHex>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>1F6C</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>8</ID>
+      <Description>"Hunter 句柄 / m_pounceAttacker"</Description>
+      <VariableType>4 Bytes</VariableType>
+      <ShowAsHex>1</ShowAsHex>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>272C</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>9</ID>
+      <Description>"Jockey 句柄 / m_jockeyAttacker"</Description>
+      <VariableType>4 Bytes</VariableType>
+      <ShowAsHex>1</ShowAsHex>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>274C</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>10</ID>
+      <Description>"Charger 携带句柄 / m_carryAttacker"</Description>
+      <VariableType>4 Bytes</VariableType>
+      <ShowAsHex>1</ShowAsHex>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>2714</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>11</ID>
+      <Description>"Charger 砸地句柄 / m_pummelAttacker"</Description>
+      <VariableType>4 Bytes</VariableType>
+      <ShowAsHex>1</ShowAsHex>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>2720</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>12</ID>
+      <Description>"临时血量缓冲 / m_healthBuffer"</Description>
+      <VariableType>Float</VariableType>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>1FAC</Offset>
+      </Offsets>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>13</ID>
+      <Description>"临时血量更新时间 / m_healthBufferTime"</Description>
+      <VariableType>Float</VariableType>
+      <Address>"client.dll"+726BD8</Address>
+      <Offsets>
+        <Offset>1FB0</Offset>
+      </Offsets>
+    </CheatEntry>
+  </CheatEntries>
+</CheatTable>

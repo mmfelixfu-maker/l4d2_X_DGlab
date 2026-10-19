@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.preview-browser/
+game-diagnostics.json
+live-verification.json
+player-candidates.json
+settings-preview.png
+dist/
